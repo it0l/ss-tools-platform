@@ -2,25 +2,26 @@
 
 Discord-integrated web platform built with Next.js, TypeScript and Supabase, featuring OAuth authentication, role-based access control and secure server-side authorization.
 
-> This repository is a sanitized portfolio edition of a private project. It contains no production credentials, private user data, deployment secrets or production-specific configuration.
+> This repository is a sanitized portfolio edition of a private project. It contains no production credentials, private user data, deployment secrets or original production Git history.
 
 ## Overview
 
-SS Tools Platform is a web application designed around Discord-based authentication and protected user areas. The project demonstrates a secure authentication flow, server-side authorization, role separation and a Supabase-backed data layer.
+SS Tools Platform demonstrates a secure Discord authentication architecture with protected user areas, database-backed roles and PostgreSQL Row Level Security.
 
-The portfolio edition focuses on the architecture and engineering decisions behind the platform while keeping production data and infrastructure private.
+The public edition was rebuilt separately from the private project so the engineering patterns can be shown without publishing production data or infrastructure configuration.
 
 ## Key features
 
 - Discord OAuth authentication through Supabase Auth
-- Protected application routes
-- Role-based access control for users and administrators
-- Centralized server-side authorization guards
-- Supabase SSR integration for authenticated server rendering
-- PostgreSQL-backed profiles and roles
-- Row Level Security-ready data model
+- Supabase SSR session handling
+- Protected `/app` and `/admin` routes
+- Centralized `requireUser()` and `requireAdmin()` server guards
+- Database-backed `student` and `admin` roles
+- PostgreSQL Row Level Security policies
+- Roles stored separately from user-editable profile fields
+- Automatic profile/role creation after first authentication
 - Safe internal redirect validation during OAuth callbacks
-- Environment-based configuration with no committed secrets
+- Sanitized environment configuration with no committed secrets
 
 ## Tech stack
 
@@ -29,44 +30,41 @@ The portfolio edition focuses on the architecture and engineering decisions behi
 - **TypeScript** — type-safe application code
 - **Tailwind CSS 4** — styling
 - **Supabase Auth** — Discord OAuth and session management
-- **Supabase PostgreSQL** — application data
-- **Supabase SSR** — server/client authentication integration
+- **Supabase PostgreSQL** — profiles and authorization data
+- **Supabase SSR** — authenticated server/client integration
 
 ## Authentication flow
 
 ```text
-Discord
-   |
-   | OAuth
-   v
-Supabase Auth
-   |
-   | authenticated session
-   v
-Next.js application
-   |
-   +--> student --> /app
-   |
-   +--> admin ----> /admin
-                      |
-                      v
-                 requireAdmin()
-                      |
-                      v
-               PostgreSQL / RLS
+User
+  |
+  | Continue with Discord
+  v
+Supabase Auth <----> Discord OAuth
+  |
+  | authenticated session
+  v
+Next.js
+  |
+  +--> /app ------> requireUser()
+  |
+  +--> /admin ----> requireAdmin()
+                         |
+                         v
+                 user_roles + RLS
 ```
 
 The OAuth callback accepts only internal redirect paths before completing navigation, reducing the risk of open redirect abuse.
 
-## Authorization
+## Authorization model
 
-Authentication and authorization are intentionally separated.
+Authentication and authorization are deliberately separated.
 
-- `requireUser()` verifies that a valid authenticated user exists.
-- `requireAdmin()` verifies the authenticated user's role before granting access to administrative areas.
-- Authorization checks run server-side and are not based only on client-side UI state.
-
-More details are available in [`docs/authentication.md`](docs/authentication.md).
+- `requireUser()` validates the authenticated Supabase user on the server.
+- `requireAdmin()` additionally reads the user's role from PostgreSQL.
+- `user_roles` is separate from the editable `profiles` table.
+- RLS adds a database-level boundary in addition to application-level guards.
+- New authenticated users receive the `student` role by default.
 
 ## Project structure
 
@@ -74,54 +72,56 @@ More details are available in [`docs/authentication.md`](docs/authentication.md)
 ss-tools-platform/
 ├── src/
 │   ├── app/
+│   │   ├── actions/
 │   │   ├── admin/
 │   │   ├── app/
 │   │   ├── auth/
-│   │   └── login/
-│   ├── components/
+│   │   ├── login/
+│   │   ├── globals.css
+│   │   ├── layout.tsx
+│   │   └── page.tsx
 │   ├── lib/
 │   │   ├── auth/
 │   │   └── supabase/
-│   └── types/
+│   ├── types/
+│   └── proxy.ts
 ├── supabase/
 │   └── migrations/
 ├── docs/
 │   ├── architecture.md
-│   └── authentication.md
+│   ├── authentication.md
+│   └── setup.md
 ├── .env.example
 ├── .gitignore
+├── SECURITY.md
 ├── package.json
 └── README.md
 ```
 
-> Source code will be added incrementally after each sanitization and review step.
+## Database security
 
-## Security considerations
+The included migration creates the public portfolio schema with:
 
-This public edition is intentionally separated from the original private repository and does not preserve its Git history.
+- `profiles`
+- `user_roles`
+- `app_role` enum
+- automatic `updated_at` handling
+- automatic profile creation for authenticated users
+- an internal admin-check function
+- RLS policies for profile and role reads/updates
+- restricted table grants
 
-The repository is prepared to exclude:
-
-- `.env` files and credentials
-- Discord client secrets
-- Supabase secret/service-role keys
-- production URLs and internal infrastructure details
-- user records or personally identifiable information
-- local database files
-- generated build artifacts
-- deployment-specific configuration
-
-Only public/publishable configuration values should ever be used in browser-accessible environment variables.
+Authenticated users can update only their own normal profile fields. Role assignment is not exposed as an editable profile field.
 
 ## Environment variables
 
-Copy `.env.example` to `.env.local` and provide your own Supabase project values:
+Copy `.env.example` to `.env.local`:
 
 ```bash
 cp .env.example .env.local
 ```
 
-Required variables:
+Then configure your own public Supabase values:
 
 ```env
 NEXT_PUBLIC_SITE_URL=http://localhost:3000
@@ -129,7 +129,7 @@ NEXT_PUBLIC_SUPABASE_URL=
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=
 ```
 
-Discord OAuth credentials should be configured through your authentication provider and must never be committed to the repository.
+Discord provider credentials belong in the authentication provider configuration and must never be committed to this repository.
 
 ## Running locally
 
@@ -138,13 +138,29 @@ npm install
 npm run dev
 ```
 
-Then open `http://localhost:3000`.
+For the complete setup, including the database migration and Discord provider configuration, see [`docs/setup.md`](docs/setup.md).
+
+## Security
+
+This repository intentionally excludes:
+
+- production `.env` files
+- Discord client secrets or bot tokens
+- Supabase secret/service-role keys
+- authentication sessions or cookies
+- real user records
+- production database exports
+- production URLs and infrastructure configuration
+- the original private repository's Git history
+
+See [`SECURITY.md`](SECURITY.md) for the repository security policy.
 
 ## Documentation
 
 - [`Architecture`](docs/architecture.md)
 - [`Authentication and authorization`](docs/authentication.md)
+- [`Local setup`](docs/setup.md)
 
-## Status
+## Portfolio edition
 
-This repository is being prepared as a public portfolio-safe edition. Functionality is migrated from the original private project only after review and sanitization.
+This repository is designed to demonstrate the authentication, authorization and database-security architecture of the original project while remaining safe to publish independently.
